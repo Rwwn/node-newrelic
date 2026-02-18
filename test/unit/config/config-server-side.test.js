@@ -449,8 +449,7 @@ test('when receiving server-side configuration', async (t) => {
     const ignoreServerConfigFlags = [true, false]
     for (const ignoreServerConfig of ignoreServerConfigFlags) {
       await t.test(
-        `should ${
-          ignoreServerConfig ? 'not ' : ''
+        `should ${ignoreServerConfig ? 'not ' : ''
         }update local configuration with server side config values when ignore_server_configuration is set to ${ignoreServerConfig}`,
         () => {
           assert.equal(config.slow_sql.enabled, false)
@@ -548,7 +547,7 @@ test('when receiving server-side configuration', async (t) => {
         harvest_limits: {
           analytic_event_data: 10000,
           custom_event_data: 10000,
-          error_event_data: 100
+          error_event_data: 300
         }
       }
 
@@ -575,6 +574,53 @@ test('when receiving server-side configuration', async (t) => {
       })
 
       config.onConnect({ event_harvest_config: invalidHarvestLimits })
+    })
+
+    await t.test('should use local harvest limit when it is lower than server limit', () => {
+      const localHarvestConfig = {
+        report_period_ms: 60000,
+        harvest_limits: {
+          analytic_event_data: 500,
+          custom_event_data: 300,
+          error_event_data: 50,
+          span_event_data: 1000,
+          log_event_data: 800
+        }
+      }
+
+      config.event_harvest_config = localHarvestConfig
+
+      const serverHarvestConfig = {
+        report_period_ms: 5000,
+        harvest_limits: {
+          analytic_event_data: 833,
+          custom_event_data: 200,
+          error_event_data: 100,
+          span_event_data: 2000,
+          log_event_data: 600
+        }
+      }
+
+      const expectedHarvestConfig = {
+        report_period_ms: 5000,
+        harvest_limits: {
+          analytic_event_data: 500,
+          custom_event_data: 200,
+          error_event_data: 50,
+          span_event_data: 1000,
+          log_event_data: 600
+        }
+      }
+
+      config.once('event_harvest_config', function (harvestconfig) {
+        assert.deepEqual(
+          harvestconfig,
+          expectedHarvestConfig,
+          'should use lower of local/server limits'
+        )
+      })
+
+      config.onConnect({ event_harvest_config: serverHarvestConfig })
     })
   })
 
